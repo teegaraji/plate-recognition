@@ -4,12 +4,15 @@ from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import CommandHandler, ApplicationBuilder, ContextTypes
 from db_json import database
+import json
 
 # Load .env file
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 BOT_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
+
+IZIN_PATH = "db_json/izin.json"
 
 
 # Fungsi /start
@@ -25,7 +28,7 @@ async def daftar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not args:
         await context.bot.send_message(chat_id=chat_id, text="Format: /daftar B1234ABC")
         return
-    plate = args[0]
+    plate = args[0].replace(" ", "").upper()
     name = update.effective_user.full_name
     username = update.effective_user.username  # ambil username telegram
     user = {"name": name, "username": username, "plate": plate, "chat_id": chat_id}
@@ -37,7 +40,7 @@ async def daftar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # Fungsi alert kendaraan
-def send_telegram_alert(chat_id, plate_number, image_url=None):
+async def send_telegram_alert(chat_id, plate_number, image_url=None):
     text = f"🚘 Kendaraan dengan plat: *{plate_number}* terdeteksi.\nIzinkan masuk?"
     payload = {"chat_id": chat_id, "text": text, "parse_mode": "Markdown"}
     requests.post(f"{BOT_URL}/sendMessage", data=payload)
@@ -47,6 +50,28 @@ def send_telegram_alert(chat_id, plate_number, image_url=None):
         requests.post(f"{BOT_URL}/sendPhoto", data=img_payload)
 
 
+async def izinkan(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = context.args
+    if not args:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id, text="Format: /izinkan B1234ABC"
+        )
+        return
+    plate = args[0]
+    # Simpan status izin
+    if os.path.exists(IZIN_PATH):
+        with open(IZIN_PATH, "r") as f:
+            izin_data = json.load(f)
+    else:
+        izin_data = {}
+    izin_data[plate] = "allowed"
+    with open(IZIN_PATH, "w") as f:
+        json.dump(izin_data, f)
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id, text=f"Plat {plate} sudah diizinkan masuk."
+    )
+
+
 # Inisialisasi dan jalankan bot
 def main():
     application = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -54,6 +79,7 @@ def main():
     application.add_handler(
         CommandHandler("daftar", daftar)
     )  # Tambahkan handler daftar
+    application.add_handler(CommandHandler("izinkan", izinkan))
     print("Bot sedang berjalan...")
     application.run_polling()
 

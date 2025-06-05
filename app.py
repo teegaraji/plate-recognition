@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from telegram_bot import send_telegram_alert
-from utils import is_plate_registered
+from utils.utils import is_plate_registered
 
 app = Flask(__name__)
 
