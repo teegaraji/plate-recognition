@@ -1,10 +1,12 @@
+import json
 import os
+
 import requests
 from dotenv import load_dotenv
 from telegram import Update
-from telegram.ext import CommandHandler, ApplicationBuilder, ContextTypes
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+
 from db_json import database
-import json
 
 # Load .env file
 load_dotenv()
@@ -18,7 +20,16 @@ IZIN_PATH = "db_json/izin.json"
 # Fungsi /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    text = "Halo! Saya adalah bot untuk mendeteksi kendaraan. Silakan kirimkan nomor plat kendaraan yang ingin didaftarkan."
+    text = (
+        "Halo! Saya adalah bot untuk mendeteksi kendaraan. Silakan kirimkan nomor plat kendaraan yang ingin didaftarkan. \n"
+        "Gunakan perintah /daftar untuk mendaftarkan plat kendaraan Anda.\n\n"
+        "Contoh: /daftar B1234ABC\n\n"
+        "Setelah mendaftar, Anda akan menerima notifikasi ketika kendaraan Anda ketika terdeteksi oleh camera.\n\n"
+        "Gunakan perintah /izinkan untuk mengizinkan kendaraan masuk.\n"
+        "Contoh: /izinkan B1234ABC\n\n"
+        "Gunakan perintah /tolak untuk menolak kendaraan masuk.\n"
+        "Contoh: /tolak B1234ABC"
+    )
     await context.bot.send_message(chat_id=chat_id, text=text)
 
 
@@ -40,7 +51,7 @@ async def daftar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # Fungsi alert kendaraan
-async def send_telegram_alert(chat_id, plate_number, image_url=None):
+def send_telegram_alert(chat_id, plate_number, image_url=None):
     text = f"🚘 Kendaraan dengan plat: *{plate_number}* terdeteksi.\nIzinkan masuk?"
     payload = {"chat_id": chat_id, "text": text, "parse_mode": "Markdown"}
     requests.post(f"{BOT_URL}/sendMessage", data=payload)
@@ -48,6 +59,15 @@ async def send_telegram_alert(chat_id, plate_number, image_url=None):
     if image_url:
         img_payload = {"chat_id": chat_id, "photo": image_url}
         requests.post(f"{BOT_URL}/sendPhoto", data=img_payload)
+
+
+def send_timeout_alert(chat_id, plate_number):
+    text = (
+        f"⏰ Deteksi plat *{plate_number}* sudah hangus karena tidak ada respon selama 1 menit.\n"
+        "Silakan tunggu deteksi berikutnya untuk mengirim feedback."
+    )
+    payload = {"chat_id": chat_id, "text": text, "parse_mode": "Markdown"}
+    requests.post(f"{BOT_URL}/sendMessage", data=payload)
 
 
 async def izinkan(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -58,17 +78,51 @@ async def izinkan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     plate = args[0]
-    # Simpan status izin
+    # Cek apakah plat masih valid (belum timeout)
     if os.path.exists(IZIN_PATH):
         with open(IZIN_PATH, "r") as f:
             izin_data = json.load(f)
     else:
         izin_data = {}
+    if plate not in izin_data:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f"Plat {plate} sudah hangus atau belum terdeteksi. Silakan tunggu deteksi berikutnya.",
+        )
+        return
     izin_data[plate] = "allowed"
     with open(IZIN_PATH, "w") as f:
         json.dump(izin_data, f)
     await context.bot.send_message(
         chat_id=update.effective_chat.id, text=f"Plat {plate} sudah diizinkan masuk."
+    )
+
+
+async def tolak(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = context.args
+    if not args:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id, text="Format: /tolak B1234ABC"
+        )
+        return
+    plate = args[0]
+    # Cek apakah plat masih valid (belum timeout)
+    if os.path.exists(IZIN_PATH):
+        with open(IZIN_PATH, "r") as f:
+            izin_data = json.load(f)
+    else:
+        izin_data = {}
+    if plate not in izin_data:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f"Plat {plate} sudah hangus atau belum terdeteksi. Silakan tunggu deteksi berikutnya.",
+        )
+        return
+    izin_data[plate] = "denied"
+    with open(IZIN_PATH, "w") as f:
+        json.dump(izin_data, f)
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id, text=f"Plat {plate} ditolak masuk."
     )
 
 
@@ -80,6 +134,7 @@ def main():
         CommandHandler("daftar", daftar)
     )  # Tambahkan handler daftar
     application.add_handler(CommandHandler("izinkan", izinkan))
+    application.add_handler(CommandHandler("tolak", tolak))
     print("Bot sedang berjalan...")
     application.run_polling()
 
