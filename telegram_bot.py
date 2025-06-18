@@ -84,18 +84,32 @@ async def izinkan(update: Update, context: ContextTypes.DEFAULT_TYPE):
             izin_data = json.load(f)
     else:
         izin_data = {}
-    if plate not in izin_data:
+        plate = args[0].replace(" ", "").upper()  # Normalisasi input user
+
+        # Normalisasi semua key di izin_data
+        izin_data_normalized = {
+            k.replace(" ", "").upper(): v for k, v in izin_data.items()
+        }
+
+        if plate not in izin_data_normalized:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=f"Plat {plate} sudah hangus atau belum terdeteksi. Silakan tunggu deteksi berikutnya.",
+            )
+            return
+
+        # Update izin_data dengan status baru
+        for k in izin_data:
+            if k.replace(" ", "").upper() == plate:
+                izin_data[k] = "allowed"  # atau "denied" untuk /tolak
+                break
+
+        with open(IZIN_PATH, "w") as f:
+            json.dump(izin_data, f)
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text=f"Plat {plate} sudah hangus atau belum terdeteksi. Silakan tunggu deteksi berikutnya.",
+            text=f"Plat {plate} sudah diizinkan masuk.",
         )
-        return
-    izin_data[plate] = "allowed"
-    with open(IZIN_PATH, "w") as f:
-        json.dump(izin_data, f)
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id, text=f"Plat {plate} sudah diizinkan masuk."
-    )
 
 
 async def tolak(update: Update, context: ContextTypes.DEFAULT_TYPE):
