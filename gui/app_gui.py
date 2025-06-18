@@ -137,43 +137,44 @@ class PlateGUI(QWidget):
         except Exception:
             izin = {}
 
+        # Normalisasi semua key izin.json
+        izin_normalized = {k.replace(" ", "").upper(): v for k, v in izin.items()}
+
         # --- LOGIKA BARU ---
         plate_to_show = ""
         circle_status = None
 
         # Jika ada plat yang sedang menunggu feedback
         if self.waiting_plate:
-            feedback = izin.get(self.waiting_plate)
+            plate_key = self.waiting_plate.replace(" ", "").upper()
+            feedback = izin_normalized.get(plate_key)
             if feedback in ["allowed", "denied"]:
                 plate_to_show = self.waiting_plate
                 self.timeout_timer.stop()
                 circle_status = feedback
 
-                # Hapus feedback dari izin.json agar tidak langsung allowed/denied pada deteksi berikutnya
+                # Hapus feedback dari izin.json
                 izin.pop(self.waiting_plate, None)
+                izin.pop(plate_key, None)
                 with open(IZIN_PATH, "w") as f:
                     json.dump(izin, f)
 
                 self.detector.reset_notified_plate(self.waiting_plate)
 
-                # Mulai timer hanya jika belum berjalan
                 if not self.feedback_timer.isActive():
                     self.update_circles(circle_status)
                     self.feedback_waiting = True
-                    self.feedback_timer.start(3000)  # 3 detik
-
-                # JANGAN set self.waiting_plate = None di sini!
+                    self.feedback_timer.start(3000)
             else:
                 plate_to_show = self.waiting_plate
                 circle_status = feedback
         elif plate:
-            # Plat baru terdeteksi dan terdaftar, tampilkan dan tunggu feedback
             self.waiting_plate = plate
+            plate_key = plate.replace(" ", "").upper()
             plate_to_show = plate
-            circle_status = izin.get(plate)
+            circle_status = izin_normalized.get(plate_key)
             self.timeout_timer.start(60000)
         else:
-            # Tidak ada plat yang sedang menunggu dan tidak ada plat baru
             plate_to_show = ""
             circle_status = None
 

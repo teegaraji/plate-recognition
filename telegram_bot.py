@@ -14,7 +14,7 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 BOT_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
-IZIN_PATH = "db_json/izin.json"
+IZIN_PATH = "./db_json/izin.json"
 
 
 # Fungsi /start
@@ -77,24 +77,34 @@ async def izinkan(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id=update.effective_chat.id, text="Format: /izinkan B1234ABC"
         )
         return
-    plate = args[0]
-    # Cek apakah plat masih valid (belum timeout)
+    plate = args[0].replace(" ", "").upper()  # Normalisasi input user
+
+    # Baca izin.json
     if os.path.exists(IZIN_PATH):
         with open(IZIN_PATH, "r") as f:
             izin_data = json.load(f)
     else:
         izin_data = {}
-    if plate not in izin_data:
+
+    # Normalisasi semua key di izin_data
+    izin_data_normalized = {k.replace(" ", "").upper(): k for k in izin_data.keys()}
+
+    if plate not in izin_data_normalized:
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text=f"Plat {plate} sudah hangus atau belum terdeteksi. Silakan tunggu deteksi berikutnya.",
         )
         return
-    izin_data[plate] = "allowed"
+
+    # Update izin_data dengan status baru
+    original_key = izin_data_normalized[plate]
+    izin_data[original_key] = "allowed"
+
     with open(IZIN_PATH, "w") as f:
         json.dump(izin_data, f)
     await context.bot.send_message(
-        chat_id=update.effective_chat.id, text=f"Plat {plate} sudah diizinkan masuk."
+        chat_id=update.effective_chat.id,
+        text=f"Plat {plate} sudah diizinkan masuk.",
     )
 
 
@@ -105,20 +115,26 @@ async def tolak(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id=update.effective_chat.id, text="Format: /tolak B1234ABC"
         )
         return
-    plate = args[0]
-    # Cek apakah plat masih valid (belum timeout)
+    plate = args[0].replace(" ", "").upper()  # Normalisasi input user
+
     if os.path.exists(IZIN_PATH):
         with open(IZIN_PATH, "r") as f:
             izin_data = json.load(f)
     else:
         izin_data = {}
-    if plate not in izin_data:
+
+    izin_data_normalized = {k.replace(" ", "").upper(): k for k in izin_data.keys()}
+
+    if plate not in izin_data_normalized:
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text=f"Plat {plate} sudah hangus atau belum terdeteksi. Silakan tunggu deteksi berikutnya.",
         )
         return
-    izin_data[plate] = "denied"
+
+    original_key = izin_data_normalized[plate]
+    izin_data[original_key] = "denied"
+
     with open(IZIN_PATH, "w") as f:
         json.dump(izin_data, f)
     await context.bot.send_message(

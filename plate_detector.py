@@ -1,3 +1,5 @@
+import json
+import os
 import time
 
 import cv2
@@ -9,6 +11,8 @@ from deep_sort_realtime.deepsort_tracker import DeepSort
 from ultralytics import YOLO
 
 from utils.utils import is_plate_registered
+
+IZIN_PATH = "./db_json/izin.json"
 
 
 def iou(boxA, boxB):
@@ -125,6 +129,22 @@ class PlateDetector:
                     if detected_plate not in self.notified_plates:
                         self.notify_plate(detected_plate)
                         self.notified_plates.add(detected_plate)
+                        # --- Tambahkan blok berikut untuk menulis ke izin.json ---
+                        try:
+                            # Normalisasi plate key
+                            plate_key = detected_plate.replace(" ", "").upper()
+                            if os.path.exists(IZIN_PATH):
+                                with open(IZIN_PATH, "r") as f:
+                                    izin_data = json.load(f)
+                            else:
+                                izin_data = {}
+                            # Hanya tambahkan jika belum ada
+                            if plate_key not in izin_data:
+                                izin_data[plate_key] = "waiting"
+                                with open(IZIN_PATH, "w") as f:
+                                    json.dump(izin_data, f)
+                        except Exception as e:
+                            print("Gagal update izin.json:", e)
                 else:
                     registered = False
             # Draw bounding box and label
